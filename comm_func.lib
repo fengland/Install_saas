@@ -1,0 +1,278 @@
+#!/bin/bash
+#================================================#
+## Public approach ##
+#   Version Number:1.00
+#   Type:app
+#   Language:bash shell
+#================================================#
+
+#Global variable setting
+typeset SCRIPT_DIR="$( cd "$( dirname "$0"  )" && pwd  )"
+typeset CONFIG_CONF=${SCRIPT_DIR}/conf/config.properties
+typeset LOG_FILE=${SCRIPT_DIR}/log/install_log
+typeset PKG_DIR=${SCRIPT_DIR}/packages
+typeset USER_NAME="istorm"
+typeset GROUP_NAME="istorm"
+typeset USER_HOME="/home/istorm"
+typeset REPEAT_FILE="${SCRIPT_DIR}/.repeat.ini"
+
+#The install log initialization
+function install_log
+{
+	typeset mark=$1
+	typeset method_name=$2
+	typeset information_log=$3
+	typeset time=$(date +'%Y-%m-%d %H:%M:%S')
+	
+	if [ "X${mark}" == "XINFO" ];then
+		echo -e "[${time}][\033[42;37m${mark}\033[0m][${method_name}][${information_log}]" | tee -a ${LOG_FILE}
+	else
+		echo -e "[${time}][\033[41;37m${mark}\033[0m][${method_name}][${information_log}]" | tee -a ${LOG_FILE}
+	fi
+}
+
+#key=value
+#read_value key return value
+function read_value
+{
+	typeset tmp_str=$1
+    typeset values_str=$(grep -wi "${tmp_str}=.*" ${CONFIG_CONF})
+    local values=$(echo "${values_str}" | awk -F= '{print $2}')
+    echo "${values}"
+}
+
+#return install ne types
+function get_ne_type_list
+{
+	local ne_type_list=""
+	typeset tmp_ne_list="db drsaas"
+	typeset tmp_str=""
+	for tmp_ne in ${tmp_ne_list}
+	do
+		tmp_str=$(read_value "is_need_install_${tmp_ne}")
+		if [ "X${tmp_str}" != "Xno" ];then
+			ne_type_list="${ne_type_list} ${tmp_ne}"
+		fi
+	done
+
+	echo "${ne_type_list}"
+}
+
+#create user istorm
+function create_user
+{
+	typeset user_id=2000
+	typeset group_id=2000
+
+	groupadd ${GROUP_NAME} -g ${group_id}
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "create_user" "Group add is failed"
+		return 1
+	fi
+
+	useradd -u ${user_id} ${USER_NAME} -g ${group_id}
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "create_user" "Create user ${USER_NAME} is failed"
+		return 1
+	fi
+
+	{
+		sleep 2
+
+		echo "Hatech1618"
+
+		sleep 2
+
+		echo "Hatech1618"
+
+		sleep 2
+	} | passwd ${USER_NAME}
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "create_user" "Modify user ${USER_NAME} passwd is failed"
+		return 1
+	fi
+    
+    echo "export JAVA_HOME=/usr/local/jdk1.8" >> ${USER_HOME}/.bash_profile
+    echo "export JRE_HOME=\$JAVA_HOME/jre" >>  ${USER_HOME}/.bash_profile
+    echo "export PATH=\$PATH:\$JAVA_HOME/bin:\$JRE_HOME/bin" >>  ${USER_HOME}/.bash_profile
+    echo "CLASSPATH=.:\$JAVA_HOME/lib/dt.jar:\$JAVA_HOME/lib/tools.jar:\$JRE_HOME/lib" >>  ${USER_HOME}/.bash_profile
+
+	install_log "INFO" "create_user" "Create user ${USER_NAME} Successfull"
+}
+
+function create_repeat
+{
+	if [ ! -e "${REPEAT_FILE}" ];then
+		touch ${REPEAT_FILE}
+		echo "checkenv 0" > ${REPEAT_FILE}
+        echo "install_jdk 0" >> ${REPEAT_FILE}
+		echo "install_nginx 0" >> ${REPEAT_FILE}
+        echo "install_redis 0" >> ${REPEAT_FILE}
+        echo "install_mq 0" >> ${REPEAT_FILE}
+        echo "install_ansible 0" >> ${REPEAT_FILE}
+        echo "install_seata 0" >> ${REPEAT_FILE}
+        echo "install_kkfileview 0" >> ${REPEAT_FILE}
+        echo "install_drsaas 0" >> ${REPEAT_FILE}
+		echo "install_db 0" >> ${REPEAT_FILE}
+		echo "init_db 0" >> ${REPEAT_FILE}
+        echo "init_nginx 0" >> ${REPEAT_FILE}
+        echo "init_redis 0" >> ${REPEAT_FILE}
+        echo "init_mq 0" >> ${REPEAT_FILE}
+        echo "init_seata 0" >> ${REPEAT_FILE}
+        echo "init_kkfileview 0" >> ${REPEAT_FILE}
+        echo "init_drsaas 0" >> ${REPEAT_FILE}
+		echo "start_nginx 0" >> ${REPEAT_FILE}
+        echo "start_redis 0" >> ${REPEAT_FILE}
+        echo "start_mq 0" >> ${REPEAT_FILE}
+        echo "start_kkfileview 0" >> ${REPEAT_FILE}
+        echo "start_drsaas 0" >> ${REPEAT_FILE}
+	fi
+	
+	return 0
+}
+
+function check_repeat
+{
+	typeset repeat_name=$1
+	typeset values_str=$(grep -wi "${repeat_name}" ${REPEAT_FILE})
+	local values=$(echo "${values_str}" | awk '{print $2}')
+    echo "${values}"
+}
+
+#check install need packages
+function check_package
+{
+	typeset ne=$1
+	typeset package_flag=0
+	install_log "INFO" "check_package" "Begin to check ${ne} packages"
+	if [ "X${ne}" == "Xdrsaas" ];then
+		ls -l ${PKG_DIR}/ansible-2*.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package ansible-2*.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/PyYAML-3*.x86_64.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package PyYAML-3*.x86_64.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+		ls -l ${PKG_DIR}/jdk-8*.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package jdk-8 is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+
+		ls -l ${PKG_DIR}/Apache_OpenOffice_4*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package Apache_OpenOffice_4*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/epel-release-latest-7.noarch.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package epel-release-latest-7.noarch.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/erlang-19*.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package erlang-19*.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/font.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package font.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/kkFileView.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package kkFileView.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/nginx.conf > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package nginx.conf is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/nginx-1*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package nginx-1*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/pcre-8*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package pcre-8*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/python-jinja2*.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package python-jinja2*.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/rabbitmq-server-3*.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package rabbitmq-server-3*.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/redis-3*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package redis-3*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/seata-server-1*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package seata-server-1*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/sshpass-1*.rpm > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package sshpass-1*.rpm is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/start_all_1.6.x.sh > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package start_all_1.6.x.sh is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+        
+        ls -l ${PKG_DIR}/zlib-1*.tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package zlib-1*.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+	elif [ "X${ne}" == "Xdb" ];then
+		ls -l ${PKG_DIR}/mysql-5.7*tar.gz > /dev/null
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "check_package" "The installation package mysql-5.7.*.x86_64.tar.gz is not in the ${PKG_DIR} directory"
+			((package_flag+=1))
+		fi
+
+		typeset sql_num=$(ls -l ${PKG_DIR}/sql/*.sql | wc -l)
+		if [ "X${sql_num}" != "X9" ];then
+			install_log "ERROR" "check_package" "The installation package *.sql num is not 9"
+			((package_flag+=1))
+		fi
+	fi
+
+	if [ $package_flag -gt 0 ];then
+		install_log "ERROR" "check_package" "Check ${ne} packages is failed"
+		return 1
+	else
+		install_log "INFO" "check_package" "Check ${ne} packages Successfull"
+	fi
+
+	return 0
+}
